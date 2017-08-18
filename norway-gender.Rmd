@@ -154,3 +154,38 @@ dev.off()
 
 
 ```
+
+
+
+```{r }
+
+library(tidyverse)
+library(RColorBrewer)
+nn <- 500
+myData <- data.frame(X = rnorm(nn),
+                     Y = rnorm(nn))
+
+setK = 6  # How many clusters?
+clusterSolution <- kmeans(myData, centers = setK)
+
+myData$whichCluster <- factor(clusterSolution$cluster)
+
+splitData <- split(myData, myData$whichCluster)
+appliedData <- lapply(splitData, function(df){
+  df[chull(df), ]  # chull really is useful, even outside of contrived examples.
+  })
+combinedData <- do.call(rbind, appliedData)
+
+zp3 <- ggplot(data = myData,
+                     aes(x = X, y = Y))
+zp3 <- zp3 + geom_polygon(data = combinedData,  # This is also a nice example of how to plot
+                          aes(x = X, y = Y, fill = whichCluster),  # two superimposed geoms
+                          alpha = 1/2)                             # from different data.frames
+zp3 <- zp3 + geom_point(size=1)
+zp3 <- zp3 + coord_equal()
+zp3 <- zp3 + scale_fill_manual(values = colorRampPalette(rev(brewer.pal(11, "Spectral")))(setK))
+
+
+
+
+```
