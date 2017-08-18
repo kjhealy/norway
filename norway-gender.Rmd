@@ -47,6 +47,8 @@ Annoyingly, these geojson files include Norway's sea boundary, and so
 the coastline resembles a large blob. But we'll continue for purposes
 of illustration.
 
+First we convert the data from geojson to something we can work with, and set the projection.
+
 ```{r }
 
 norway_komm <- readOGR(dsn = "geojson/kommuner.geojson",
@@ -55,33 +57,65 @@ norway_komm <- readOGR(dsn = "geojson/kommuner.geojson",
 norway_komm <- spTransform(norway_komm,
                            CRS("+proj=laea +lat_0=59.91 +lon_0=10.75 +x_0=0 +y_0=0 +a=6370997 +b=6370997 +units=m +no_defs"))
 
+```
+
+```{r}
+dim(norway_komm)
+```
+
+The `noraway_komm` object appears to be a small data frame, but in fact it is a complext spatial object with lots of components (as a call to `str(norway_komm)` will confirm). The 434 features it has are the kommuner units. 
+
+What we need to do is "reach inside" the spatial data object and create an id variable for the kommuner units that we will use to match on shortly. 
+
+```{r}
 norway_komm@data$id <- rownames(norway_komm@data)
 
+```
+
+The `@data$id` and `@data` instructions are ways of referring to components of the `norway_komm` object.
+
+Next we "fortify" the `norway_komm` spatial object, which in essence means turning it into a data frame of the sort we are used to working with while mapping things.
+
+```{r}
 kommuner_map <- fortify(norway_komm)
 
+```
+
+Next, we need to match the `id` variables and extract the kommune names. We create an index variable, `ind`, and get the names of the kommuner from `norway_komm@data$navn`. We use our index variable to make sure we get our match right.
+
+```{r}
 ind <- match(kommuner_map$id, norway_komm@data$id)
 
 kommuner_map$kommune <- norway_komm@data$navn[ind]
+```
 
+Finally, for this stage, we convert the kommuner names from a factor to a character type, which will make them easier to deal with.
+
+```{r}
 kommuner_map <- kommuner_map %>% mutate_if(is.factor, as.character)
+```
 
+Now we are in a position to draw a map of the kommuner.
+
+```{r}
 p <- ggplot(data = kommuner_map,
             mapping = aes(x = long,
                           y = lat,
                           group = group))
 
-pdf(file = "figures/kommuner.pdf", height = 10, width = 8)
 p + geom_map(data = kommuner_map,
              map = kommuner_map,
              mapping = aes(map_id = id,
                            group = group),
              color = "gray80",
              fill = "white")
-dev.off()
 
 ```
 
-# Merge with some data
+
+# Merge in some data
+
+Statistics Norway generously provides some data to us. We join it to our map data as we did in the US case, except here the key variable is `kommune`. Then we can draw some choropleth maps. Sorry about the coastline issue!
 
 ```{r }
 
@@ -102,11 +136,8 @@ p1 <- p + geom_map(data = kommuner_map,
                    color = "grey40",
                    size = 0.1)
 
-pdf(file = "figures/income_mwr.pdf", height = 10, width = 8)
 p1 + coord_equal() + theme_normap() +
     labs(fill = "Ratio of Women to Men's'\nGross Income, by Kommune") + 
     scale_fill_brewer(palette = "Oranges")
-dev.off()
-
 
 ```
