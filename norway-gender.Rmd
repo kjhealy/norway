@@ -1,0 +1,112 @@
+---
+title: "Gender Equality in Norwegian Municipalities"
+author: "Kieran Healy"
+date: "4/7/2017"
+output:
+  html_document: default
+  pdf_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+library(rgdal)
+
+library(tidyverse)
+
+theme_set(theme_minimal())
+
+theme_normap <- function(base_size=9, base_family="") {
+    require(grid)
+    theme_bw(base_size=base_size, base_family=base_family) %+replace%
+    theme(axis.line=element_blank(),
+          axis.text=element_blank(),
+          axis.ticks=element_blank(),
+          axis.title=element_blank(),
+          panel.background=element_blank(),
+          panel.border=element_blank(),
+          panel.grid=element_blank(),
+          panel.spacing=unit(0, "lines"),
+          plot.background=element_blank(),
+          legend.justification = c(0,0),
+          legend.position = c(0.6,0.4)
+          )
+}
+
+
+## Make a "figures" subdirectory if one doesn't exist
+ifelse(!dir.exists(file.path("figures")),
+       dir.create(file.path("figures")),
+       FALSE)
+
+```
+
+# Load the Map Data
+
+Annoyingly, these geojson files include Norway's sea boundary, and so
+the coastline resembles a large blob. But we'll continue for purposes
+of illustration.
+
+```{r }
+
+norway_komm <- readOGR(dsn = "geojson/kommuner.geojson",
+                       layer = "OGRGeoJSON")
+
+norway_komm <- spTransform(norway_komm,
+                           CRS("+proj=laea +lat_0=59.91 +lon_0=10.75 +x_0=0 +y_0=0 +a=6370997 +b=6370997 +units=m +no_defs"))
+
+norway_komm@data$id <- rownames(norway_komm@data)
+
+kommuner_map <- fortify(norway_komm)
+
+ind <- match(kommuner_map$id, norway_komm@data$id)
+
+kommuner_map$kommune <- norway_komm@data$navn[ind]
+
+kommuner_map <- kommuner_map %>% mutate_if(is.factor, as.character)
+
+p <- ggplot(data = kommuner_map,
+            mapping = aes(x = long,
+                          y = lat,
+                          group = group))
+
+pdf(file = "figures/kommuner.pdf", height = 10, width = 8)
+p + geom_map(data = kommuner_map,
+             map = kommuner_map,
+             mapping = aes(map_id = id,
+                           group = group),
+             color = "gray80",
+             fill = "white")
+dev.off()
+
+```
+
+# Merge with some data
+
+```{r }
+
+data <- read_csv("data/norway-gender.csv")
+
+kommuner_map <- left_join(kommuner_map, data, by = "kommune")
+
+p <- ggplot(data = kommuner_map,
+            mapping = aes(x = long,
+                          y = lat,
+                          group = group))
+
+p1 <- p + geom_map(data = kommuner_map,
+                   map = kommuner_map,
+                   mapping = aes(map_id = id,
+                                group = group,
+                                fill = cut(income_mwr, 5, dig.lab = 2)),
+                   color = "grey40",
+                   size = 0.1)
+
+pdf(file = "figures/income_mwr.pdf", height = 10, width = 8)
+p1 + coord_equal() + theme_normap() +
+    labs(fill = "Ratio of Women to Men's'\nGross Income, by Kommune") + 
+    scale_fill_brewer(palette = "Oranges")
+dev.off()
+
+
+```
